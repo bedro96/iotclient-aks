@@ -77,9 +77,14 @@ public class SimulatorWSClient {
             switch (action) {
                 case "device.start":
                     System.out.println("서비스 시작 명령 수신");
+                    if(iotWorkerFuture != null && !iotWorkerFuture.isDone()) {
+                        System.out.println("iotClient is already running, start command ignored");
+                        break;
+                    }
                     isReadytoSend = true;
                     iotClient.setReadytoRun(isReadytoSend);
                     // 시작: IotClient의 cancellable worker를 사용
+                    // if started then do nothing.
                     try {
                         iotWorkerFuture = iotClient.start();
                         System.out.println("iotClient.start() 호출됨, future saved");
