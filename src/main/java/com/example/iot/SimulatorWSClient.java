@@ -3,6 +3,9 @@ package com.example.iot;
 import java.net.URI;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javax.websocket.ClientEndpoint;
 import javax.websocket.CloseReason;
@@ -58,6 +61,10 @@ public class SimulatorWSClient {
     private Session session;
     private static CountDownLatch latch = new CountDownLatch(1);
     private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    // keepalive scheduler to send minimal messages periodically to keep WS alive
+    private ScheduledExecutorService keepaliveScheduler = null;
+    private static final int KEEPALIVE_INTERVAL_SECONDS = 10;
 
     // Static으로 변경하여 모든 인스턴스가 같은 iotClient를 공유
     private static final IotClient iotClient = new IotClient();
@@ -190,6 +197,27 @@ public class SimulatorWSClient {
         this.session = session;
         sendMessage(MessageType.EVENT, "connected", "");
         sendMessage(MessageType.REQUEST, "device need device_id", "");
+        // start periodic keepalive pings to avoid idle websocket disconnects
+        try {
+            if (keepaliveScheduler == null || keepaliveScheduler.isShutdown()) {
+                keepaliveScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread t = new Thread(r, "WS-Keepalive");
+                    t.setDaemon(true);
+                    return t;
+                });
+                keepaliveScheduler.scheduleAtFixedRate(() -> {
+                    try {
+                        if (this.session != null && this.session.isOpen()) {
+                            sendMessage(MessageType.EVENT, "report", "");
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Keepalive send error: " + e.getMessage());
+                    }
+                }, KEEPALIVE_INTERVAL_SECONDS, KEEPALIVE_INTERVAL_SECONDS, TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to start keepalive scheduler: " + e.getMessage());
+        }
         // Start IotClient worker (non-blocking) and save Future for cancellation
         // try {
         // iotWorkerFuture = iotClient.start();
@@ -207,6 +235,14 @@ public class SimulatorWSClient {
         System.out.println("Connection closed: " + reason);
         System.out.println("Close code: " + reason.getCloseCode());
         System.out.println("Reason phrase: " + reason.getReasonPhrase());
+        // shutdown keepalive scheduler if running
+        try {
+            if (keepaliveScheduler != null && !keepaliveScheduler.isShutdown()) {
+                keepaliveScheduler.shutdownNow();
+                keepaliveScheduler = null;
+            }
+        } catch (Exception ignored) {
+        }
         try {
             sendMessage(MessageType.EVENT, "connection closed", "");
         } catch (Exception e) {
@@ -221,6 +257,14 @@ public class SimulatorWSClient {
         System.err.println("=== @OnError triggered ===");
         System.err.println("Error: " + throwable.getMessage());
         throwable.printStackTrace();
+        // shutdown keepalive scheduler on error
+        try {
+            if (keepaliveScheduler != null && !keepaliveScheduler.isShutdown()) {
+                keepaliveScheduler.shutdownNow();
+                keepaliveScheduler = null;
+            }
+        } catch (Exception ignored) {
+        }
         try {
             sendMessage(MessageType.ERROR, "error occurred", "");
         } catch (Exception e) {
