@@ -6,7 +6,7 @@ metadata:
   labels:
     app: iotclient
 spec:
-  replicas: 2
+  replicas: 100
   selector:
     matchLabels:
       app: iotclient
@@ -19,9 +19,11 @@ spec:
       nodeSelector:
         agentpool: iotclient
 
+      terminationGracePeriodSeconds: 30
+
       containers:
         - name: iotclient
-          image: iotacr.azurecr.io/iotclient-java-simulator/iotclient-java-simulator:latest
+          image: iotacr.azurecr.io/iotclient-java-simulator:latest
           imagePullPolicy: IfNotPresent
 
           # inbound가 없으므로 ports/service 불필요
@@ -43,10 +45,10 @@ spec:
             failureThreshold: 3
           resources:
             requests:
+              cpu: "25m"
+              memory: "50Mi"
+            limits:
               cpu: "50m"
               memory: "100Mi"
-            limits:
-              cpu: "100m"
-              memory: "200Mi"
 
-          terminationGracePeriodSeconds: 30
+          
