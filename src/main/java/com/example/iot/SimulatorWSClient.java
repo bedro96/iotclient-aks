@@ -70,6 +70,10 @@ public class SimulatorWSClient {
     private static final IotClient iotClient = new IotClient();
     // handle to running worker so we can cancel it
     private static java.util.concurrent.Future<?> iotWorkerFuture = null;
+    private static final java.util.Random Random = new java.util.Random();
+    private static int getRandomSalt() {
+        return Random.nextInt(5); // 0, 1, 2, 3, or 4 seconds
+    }
 
     // 서버로부터 명령 수신   
     @OnMessage
@@ -306,6 +310,8 @@ public class SimulatorWSClient {
         }
         // WebSocket 클라이언트 시작
         try {
+            // let's wait for random time to start
+            Thread.sleep(getRandomSalt() * 1000);
             System.out.println("=== Starting WebSocket Client ===");
             System.out.println("Device UUID: " + DEVICE_UUID);
             System.out.println("Server URI: " + SERVER_URI);
@@ -314,9 +320,27 @@ public class SimulatorWSClient {
             String uri = SERVER_URI + DEVICE_UUID;
             System.out.println("Connecting to: " + uri);
 
-            Session session = container.connectToServer(SimulatorWSClient.class, URI.create(uri));
-            System.out.println("Connection established. Session ID: " + session.getId());
-            System.out.println("Waiting for messages...");
+            // reconnect logic with retry if connection fails
+            int maxRetries = 3;
+            int retryCount = 0;
+            while (retryCount < maxRetries) {
+                try {                    
+                    Session session = container.connectToServer(SimulatorWSClient.class, URI.create(uri));
+                    System.out.println("Connection established. Session ID: " + session.getId());
+                    break; // 연결 성공 시 루프 탈출
+                } catch (Exception e) {
+                    retryCount++;
+                    int retryDelay = 2000 * retryCount; // 지수적 백오프
+                    System.err.println("Connection failed (attempt " + retryCount + "): " + e.getMessage());
+                    if (retryCount < maxRetries) {
+                        System.out.println("Retrying in " + retryDelay / 1000 + " seconds...");
+                        Thread.sleep(retryDelay);
+                    } else {
+                        System.err.println("Max retries reached. Exiting.");
+                        return;
+                    }
+                }
+            }
 
             latch.await(); // 연결 종료까지 대기
             System.out.println("WebSocket client terminated.");

@@ -6,7 +6,7 @@ metadata:
   labels:
     app: iotclient
 spec:
-  replicas: 100
+  replicas: 200
   selector:
     matchLabels:
       app: iotclient
