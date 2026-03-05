@@ -58,8 +58,8 @@ public class SimulatorWSClient {
     }
 
     private boolean isReadytoSend = false;
-    private Session session;
-    private static CountDownLatch latch = new CountDownLatch(1);
+    private volatile Session session;
+    private static final CountDownLatch latch = new CountDownLatch(1);
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     // keepalive scheduler to send minimal messages periodically to keep WS alive
@@ -69,7 +69,7 @@ public class SimulatorWSClient {
     // Static으로 변경하여 모든 인스턴스가 같은 iotClient를 공유
     private static final IotClient iotClient = new IotClient();
     // handle to running worker so we can cancel it
-    private static java.util.concurrent.Future<?> iotWorkerFuture = null;
+    private static volatile java.util.concurrent.Future<?> iotWorkerFuture = null;
     private static final java.util.Random Random = new java.util.Random();
     private static int getRandomSalt() {
         return Random.nextInt(5); // 0, 1, 2, 3, or 4 seconds
@@ -277,7 +277,14 @@ public class SimulatorWSClient {
     }
 
     // 서버에 상태/결과 보고 (JSON 형식)
-    public void sendMessage(MessageType messageType, String status, String correlation_id) {
+    // Synchronized to prevent concurrent sends that would cause IllegalStateException
+    // with getAsyncRemote(); getBasicRemote() is used for reliable ordered delivery.
+    public synchronized void sendMessage(MessageType messageType, String status, String correlation_id) {
+        Session s = this.session;
+        if (s == null || !s.isOpen()) {
+            System.out.println("[sendMessage] Skipped: session is " + (s == null ? "null" : "closed") + " (type=" + messageType + ", status=" + status + ")");
+            return;
+        }
         try {
             String TIMESTAMP = get_Timestamp();
             // String json = String.format("{\"status\":\"%s\", \"deviceId\":\"%s\"}",
@@ -293,7 +300,7 @@ public class SimulatorWSClient {
             node.set("payload", objectMapper.createObjectNode().put("DEVICE_UUID", DEVICE_UUID));
             node.set("meta", objectMapper.createObjectNode().put("source", "simulator"));
             String json = node.toString();
-            session.getAsyncRemote().sendText(json);
+            s.getBasicRemote().sendText(json);
         } catch (Exception e) {
             e.printStackTrace();
         }

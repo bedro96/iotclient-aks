@@ -15,24 +15,24 @@ import com.microsoft.azure.sdk.iot.device.Message;
 public class IotClient {
 
     // Device identification
-    private String DEVICE_ID = System.getenv().getOrDefault("DEVICE_ID", "javadevice001");
-    private boolean isReadytoRun = false;
+    private volatile String DEVICE_ID = System.getenv().getOrDefault("DEVICE_ID", "javadevice001");
+    private volatile boolean isReadytoRun = false;
     private static final String MODEL_ID = System.getenv().getOrDefault("MODEL_ID", "dtmi:iotdevice");
 
     // 보안을 위해 환경변수로 받아 사용 (직접 문자열 하드코딩 지양)
     // 설정: export
     // IOTHUB_DEVICE_CONNECTION_STRING="HostName=...;DeviceId=...;SharedAccessKey=..."
-    private String IOTHUB_DEVICE_CONNECTION_STRING = null;
+    private volatile String IOTHUB_DEVICE_CONNECTION_STRING = null;
 
     // MQTT 권장 (방화벽 포트 8883 필요)
     // [5](https://learn.microsoft.com/en-us/azure/iot/tutorial-send-telemetry-iot-hub)
     private static final IotHubClientProtocol PROTOCOL = IotHubClientProtocol.MQTT;
 
     // Retry configuration
-    private int INITIAL_RETRY_DELAY_SECONDS = 30;
-    private int MAX_RETRY_DELAY_SECONDS = 960; // Max ~16 minutes
-    private int MAX_RETRIES = 10;
-    private int MESSAGE_INTERVAL_SECONDS = 5;
+    private volatile int INITIAL_RETRY_DELAY_SECONDS = 30;
+    private volatile int MAX_RETRY_DELAY_SECONDS = 960; // Max ~16 minutes
+    private volatile int MAX_RETRIES = 10;
+    private volatile int MESSAGE_INTERVAL_SECONDS = 5;
 
     // Scheduler for async retry operations
     private static final ScheduledExecutorService retryScheduler = Executors.newScheduledThreadPool(1);
